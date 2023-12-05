@@ -34,6 +34,14 @@ class SummaryProducerIO(SummaryProducerBase):
             assert key in self.dbsums.keys(), f"SummaryType key [{key}] is not allowed"
             return {key: self.dbsums[key]}
         return self.dbsums
+    
+    def info(self, summaryType, summaryData):
+        if self.verbose is False:
+            return
+        if isinstance(summaryData, (DataFrame, Series)):
+            print(f"  ==> Created {summaryData.shape[0]} Artist ID => {summaryType} Summary Data")
+        else:
+            print(f"  ==> Did not create Artist ID => {summaryType} Summary Data")
             
     ###########################################################################
     # Master Maker
@@ -72,10 +80,8 @@ class SummaryProducerIO(SummaryProducerBase):
                 artistNumAlbums = modValMetaData["NumAlbums"]
                 artistIDToNumAlbums = concat([artistIDToNumAlbums, artistNumAlbums]) if isinstance(artistIDToNumAlbums, Series) else artistNumAlbums
 
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToName.shape[0]} Artist ID => Name {summaryType} Summary Data")
-            print(f"  ==> Created {artistIDToRef.shape[0]} Artist ID => Ref {summaryType} Summary Data")
-            print(f"  ==> Created {artistIDToNumAlbums.shape[0]} Artist ID => NumAlbums {summaryType} Summary Data")
+        self.info(f"Name {summaryType}", artistIDToName)
+        self.info(f"Ref {summaryType}", artistIDToRef)
 
         if self.test is True:
             print("  ==> Only testing. Will not save.")
@@ -110,11 +116,7 @@ class SummaryProducerIO(SummaryProducerBase):
         artistIDToCounts = artistIDToMedia.map(lambda x: len(x) if isinstance(x, list) else 0)
         artistIDToCounts = artistIDToCounts.fillna(0).astype(int)
         
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToCounts.shape[0]} Artist ID => Counts {summaryType} Summary Data")
-            for rankedMediaType, rankedMediaTypeData in artistIDToMedia.items():
-                if len(rankedMediaTypeData) > 0 and rankedMediaTypeData.count() > 0:
-                    print(f"  ==> Created {rankedMediaTypeData.shape[0]} Artist ID => {rankedMediaType} {summaryType} Summary Data")
+        self.info(f"Counts {summaryType}", artistIDToCounts)
                 
         if self.test is True:
             print("  ==> Only testing. Will not save.")
@@ -145,8 +147,7 @@ class SummaryProducerIO(SummaryProducerBase):
             if isinstance(modValMetaData, DataFrame):
                 artistIDToGenre = concat([artistIDToGenre, modValMetaData]) if artistIDToGenre is not None else modValMetaData
 
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToGenre.shape[0]} Artist ID => {summaryType} Summary Data")
+        self.info(summaryType, artistIDToGenre)
             
         if self.test is True:
             print("  ==> Only testing. Will not save.")
@@ -174,8 +175,7 @@ class SummaryProducerIO(SummaryProducerBase):
             if isinstance(modValMetaData, DataFrame):
                 artistIDToLink = concat([artistIDToLink, modValMetaData]) if artistIDToLink is not None else modValMetaData
 
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToLink.shape[0]} Artist ID => {summaryType} Summary Data")
+        self.info(summaryType, artistIDToLink)
             
         if self.test is True:
             print("  ==> Only testing. Will not save.")
@@ -201,8 +201,7 @@ class SummaryProducerIO(SummaryProducerBase):
             if isinstance(modValMetaData, DataFrame):
                 artistIDToBio = concat([artistIDToBio, modValMetaData]) if artistIDToBio is not None else modValMetaData
 
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToBio.shape[0]} Artist ID => {summaryType} Summary Data")
+        self.info(summaryType, artistIDToBio)
             
         if self.test is True:
             print("  ==> Only testing. Will not save.")
@@ -229,8 +228,7 @@ class SummaryProducerIO(SummaryProducerBase):
             if isinstance(modValMetaData, DataFrame):
                 artistIDToDates = concat([artistIDToDates, modValMetaData]) if artistIDToDates is not None else modValMetaData
 
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToDates.shape[0]} Artist ID => {summaryType} Summary Data")
+        self.info(summaryType, artistIDToDates)
             
         if self.test is True:
             print("  ==> Only testing. Will not save.")
@@ -256,8 +254,7 @@ class SummaryProducerIO(SummaryProducerBase):
             if isinstance(modValMetaData, DataFrame):
                 artistIDToMetric = concat([artistIDToMetric, modValMetaData]) if artistIDToMetric is not None else modValMetaData
 
-        if self.verbose is True:
-            print(f"  ==> Created {artistIDToMetric.shape[0]} Artist ID => {summaryType} Summary Data")
+        self.info(summaryType, artistIDToMetric)
             
         if self.test is True:
             print("  ==> Only testing. Will not save.")

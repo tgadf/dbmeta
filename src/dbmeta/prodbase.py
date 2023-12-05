@@ -1,10 +1,10 @@
 """ Metadata Producer Base Class """
 
 __all__ = ["MatchProducerBase", "MatchOmitBase", "SummaryProducerBase",
-           "MetaProducerBase", "MetaProducerUtilBase", "MediaTypeRankBase"]
+           "MetaProducerUtilBase", "MediaTypeRankBase"]
 
 from dbmaster import MasterMetas
-from dbbase import SummaryNameStandard, MatchNameStandard, MusicDBRootDataIO, getModVals
+from dbbase import SummaryNameStandard, MatchNameStandard, MusicDBRootDataIO
 from dbraw import RawDataIOBase
 from utils import getFlatList
 from pandas import Series
@@ -85,18 +85,6 @@ class SummaryProducerBase:
             return False
         retval = True if ((n + 1) % 25 == 0 or (n + 1) == 5) else False
         return retval
-
-
-###############################################################################
-# Meta Producer Base
-###############################################################################
-class MetaProducerBase:
-    def __init__(self, rdio, **kwargs):
-        self.verbose = kwargs.get('verbose', False)
-        assert isinstance(rdio, MusicDBRootDataIO), f"rdio [{rdio}] is not of type MusicDBRootDataIO"
-        self.rdio = rdio
-        self.db = rdio.db
-        self.modVals = getModVals(None)
     
     
 ###############################################################################

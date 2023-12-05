@@ -2,11 +2,10 @@
 
 __all__ = ["MetaProducerBase"]
 
-from dbmaster import MasterMetas
 from dbbase import MusicDBRootDataIO, getModVals
-from utils import Timestat, getFlatList
-from pandas import DataFrame, Series, concat
-import warnings
+from utils import Timestat
+from .metabasicprod import MetaBasicProducer
+
 
 class MetaProducerBase:
     def __repr__(self):
@@ -15,9 +14,11 @@ class MetaProducerBase:
     def __init__(self, rdio: MusicDBRootDataIO, **kwargs):
         self.rdio = rdio
         self.verbose = kwargs.get('verbose', False)
-        self.maxMedia = kwargs.get('maxMedia', None)
         self.mediaRanking = {}
         self.dbmetas = {}
+        
+        self.procs = {}
+        self.procs["Basic"] = MetaBasicProducer()
         
     ###########################################################################
     # Easy I/O
@@ -42,98 +43,28 @@ class MetaProducerBase:
         verbose = kwargs.get("verbose", self.verbose)
         test = kwargs.get('test', False)
         modVals = getModVals(modVal) if test is False else [0]
-        metaTypes = self.getMetaTypes(key)
+        metaTypes = list(self.procs.keys())
             
-        ts = Timestat(f"Making {len(modVals)} {list(metaTypes.keys())} MetaData", verbose=verbose)
+        ts = Timestat(f"Making {len(modVals)} {metaTypes} MetaData Files", verbose=verbose)
         
         for n, modVal in enumerate(modVals):
             if self.isUpdateModVal(n):
                 ts.update(n=n + 1, N=len(modVals))
 
             modValData = self.rdio.getModValData(modVal)
-            for metaKey, metaFunc in metaTypes.items():
+            for metaType, metaTypeProd in self.procs.items():
                 if verbose:
-                    print(f"    MetaType={metaKey} ... ", end="")
-                metaData = metaFunc(modValData)
+                    print(f"    ModVal={modVal: <4} | MetaType={metaType} ... ", end="")
+                    
+                metaData = metaTypeProd.getMetaData(modValData)
                 if test is True:
                     print("Only testing. Will not save.")
                     continue
-                else:
-                    if verbose:
-                        print(metaData.shape)
-                    self.rdio.saveData(f"Meta{metaKey}", modVal, data=metaData)
+                
+                if verbose:
+                    print(f"{metaData.shape} ... ", end="")
+                self.rdio.saveData(f"Meta{metaType}", modVal, data=metaData)
+                if verbose is True:
+                    print("✓")
                         
         ts.stop()
-    
-    ###########################################################################
-    # Basic Data
-    ###########################################################################
-    def getBasicMetaData(self, modValData: DataFrame) -> 'DataFrame':
-        assert isinstance(modValData, DataFrame), f"ModValData [{type(modValData)}] is not a DataFrame object"
-        cols = ["name", "url"]
-        assert all([col in modValData.columns for col in cols]), f"Could not find all basic columns [{cols}] in DataFrame columns [{modValData.columns}]"
-        if "Media" in modValData.columns:
-            cols.append("Media")
-            basicData = modValData[cols].copy(deep=True)
-            basicData["NumAlbums"] = basicData["Media"].apply(lambda media: media.shape[0] if isinstance(media, DataFrame) else 0)
-            basicData = basicData.drop("Media", axis=1).rename(columns={"name": "ArtistName", "url": "URL"})
-        else:
-            basicData = modValData[cols].copy(deep=True)
-            basicData["NumAlbums"] = 0
-            basicData = basicData.rename(columns={"name": "ArtistName", "url": "URL"})
-            
-        return basicData
-    
-    ###########################################################################
-    # Media Data
-    ###########################################################################
-    def getMediaMetaData(self, modValData: DataFrame) -> 'DataFrame':
-        assert isinstance(self.mediaRanking, dict), f"MediaRanking [{type(self.mediaRanking)}] is not a dict object"
-        assert isinstance(modValData, DataFrame), f"ModValData [{type(modValData)}] is not a DataFrame object"
-        col = "Media"
-        if col not in modValData.columns:
-            return None
-        assert col in modValData.columns, f"Could not find all media column [{col}] in DataFrame columns [{modValData.columns}]"
-    
-        def testMediaNameTypes(mediaData):
-            mediaSampleData = mediaData[mediaData.notna()]
-            mediaSampleData = concat(mediaSampleData.sample(n=min([50, mediaSampleData.shape[0]]), replace=True).values)
-            if not all([isinstance(mediaSampleData, DataFrame), "Type" in mediaSampleData.columns]):
-                warnings.warn("Warning: There is no media to test media name types...")
-                return
-            
-            mediaTypeNames = set(mediaSampleData["Type"].unique())
-            mediaRankTypeNameValues = set(getFlatList(self.mediaRanking.values()))
-            unknownMediaTypeNames = mediaTypeNames.difference(mediaRankTypeNameValues)
-            if len(unknownMediaTypeNames) > 0:
-                raise ValueError(f"Could not find [{unknownMediaTypeNames}] mediaTypeNames in mediaRankings (from metadataio)\nMediaTypeNames = {mediaTypeNames}\nMediaRankTypeNameValues = {mediaRankTypeNameValues}")
-            unknownMediaRankTypeNames = mediaRankTypeNameValues.difference(mediaTypeNames)
-            if len(unknownMediaRankTypeNames) > 0:
-                if self.verbose is True:
-                    warnings.warn(f"Warning: Could not find {unknownMediaRankTypeNames} mediaRankTypeNames in mediaTypeNames (from data)")
-    
-        def getMediaFromType(media, mediaRank, mediaRankTypes):
-            if not isinstance(media, DataFrame):
-                return None
-            retvalMediaData = media[media["Type"].isin(mediaRankTypes)] if ("Type" in media.columns) else None
-            retval = {}
-            if isinstance(retvalMediaData, DataFrame) and retvalMediaData.shape[0] > 0:
-                for mediaRank, mediaRankData in retvalMediaData.groupby("Type"):
-                    retval[mediaRank] = retvalMediaData.head(self.maxMedia)["name"].to_list() if isinstance(self.maxMedia, int) else mediaRankData["name"].to_list()
-            else:
-                retval = None
-            return retval
-        
-        mediaData = modValData[col]
-        testMediaNameTypes(mediaData)
-        mediaRankData = mediaData.apply(lambda media: {mediaRank: getMediaFromType(media, mediaRank, mediaRankTypes) for mediaRank, mediaRankTypes in self.mediaRanking.items()})
-        mediaRankData = DataFrame(mediaRankData.to_dict()).T
-        mediaRankData = mediaRankData.rename(columns=MasterMetas().getMediaTypes())
-        return mediaRankData
-    
-    ##########################################################################################
-    # Helper Functions
-    ##########################################################################################
-    def getDictData(self, colData, key):
-        retval = colData.get(key) if isinstance(colData, dict) else None
-        return retval
